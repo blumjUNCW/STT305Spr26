@@ -142,6 +142,227 @@ libname SASData '~/SASData';
     else do;
       name=scan(event,3);
       output Tropical;
-   end;
+    end;
 
+  run;
+
+  proc freq data=SASData.storm_2017;
+    table basin;
+  run;
+
+  data Atlantic Pacific Indian;
+    set SASData.storm_2017;
+
+    /**SELECT blocks can also be used for conditional branching*/
+    select(basin);/*starts with SELECT and an optional expression and requires end*/
+     when('NA') output Atlantic; /*true if the parameter here matches expression in SELECT*/
+     when('EP','SP') output Pacific; /*when arguments support lists automatically*/
+     otherwise output Indian;/*OTHERWISE is available to cover any values
+                              not included in the WHEN statements*/
+    end;
+  run;
+
+  data Atlantic Pacific Indian;
+    set SASData.storm_2017;
+
+    select(basin);
+     when('NA') output Atlantic; 
+     when('EP','SP') output Pacific;
+    end;/*you must cover all possibilities, either in the set of WHEN statements
+          or by using an OTHERWISE*/
+  run;
+
+  data Atlantic Pacific Indian;
+    set SASData.storm_2017;
+
+    select(basin);
+     when('NA') output Atlantic; 
+     when('EP','SP') output Pacific;
+     when('NI','SI') output Indian;
+    end;/*If you cover everyting in your WHEN statements, OTHERWISE is not
+          needed*/
+  run;
+
+  
+  data Atlantic Pacific Indian;
+    set SASData.storm_2017;
+
+    select(substr(basin,2,1));/*any expression can be put in the select*/
+     when('A') output Atlantic; 
+     when('P') output Pacific;
+     when('I') output Indian;
+    end;
+  run;
+
+  data Atlantic Pacific Indian;
+    set SASData.storm_2017;
+
+    duration=EndDate-StartDate+1;
+      /*it does make some sense to do math on date values*/
+
+    if startDate gt endDate then problem='Yes';
+      else problem='No';/*can also make comparisons directly*/
+
+    select(substr(basin,2,1));
+     when('A') output Atlantic; 
+     when('P') output Pacific;
+     when('I') output Indian;
+    end;
+  run;
+
+  data Atlantic Pacific Indian;
+    set SASData.storm_2017;
+
+    duration=EndDate-StartDate+1;
+
+    weeks=intck('week',startDate,endDate);
+    /*intck - count intervals
+        intck('interval-type',start,end)*/
+    months=intck('month',startDate,endDate);
+    /*default method is to look for standard
+      boundaries between weeks...Saturday/Sunday
+                or months..1st of Month
+                or years..Dec 31/Jan 1*/
+
+    select(substr(basin,2,1));
+     when('A') output Atlantic; 
+     when('P') output Pacific;
+     when('I') output Indian;
+    end;
+
+    format endDate startDate weekdate.;
+  run;
+
+  
+  data Atlantic Pacific Indian;
+    set SASData.storm_2017;
+
+    duration=EndDate-StartDate+1;
+
+    weeks=intck('week',startDate,endDate);
+    months=intck('month',startDate,endDate);
+
+    weeksB=intck('week',startDate,endDate,'Continuous');
+    monthsB=intck('month',startDate,endDate,'Continuous');
+
+    select(substr(basin,2,1));
+     when('A') output Atlantic; 
+     when('P') output Pacific;
+     when('I') output Indian;
+    end;
+
+    format endDate startDate weekdate.;
+  run;
+
+  /*Suppose I want to know how far apart any
+    two storms start day is, within the same basin*/
+  proc sort data=SASData.storm_2017 out=storm17;
+    by basin startDate;
+  run;
+
+  data DaysApart;
+    set storm17(drop=location);
+    
+    /**need to use startDate values on separate, adjacent records*/
+    previous=lag(startDate);
+    previous2=lag2(startDate);
+    /*lag makes variable values from previous records available
+      on the current record*/
+
+    format previous previous2 date9.;
+
+  run;
+
+  
+  data DaysApart;
+    set storm17(drop=location);
+    
+    DaysAfter=startDate-lag(startDate);
+    /**OK, but I have an issue when the basin changes... */
+
+    label DaysAfter = 'Days from Previous Storm Start';
+  run;
+
+  data DaysApart;
+    set storm17(drop=location);
+    
+    DaysAfter=startDate-lag(startDate);
+    if basin eq lag(basin) then output;
+
+    label DaysAfter = 'Days from Previous Storm Start';
+  run;
+
+  /*What if I want to know the time from when the first storm
+    begins to the last storm's end, for each basin?*/
+
+  /**I can track BY groups in a DATA step using first. and last. variables*/
+  data SeasonLength;
+    set storm17(drop=location);
+
+    by basin;
+    /*if you put a BY statement in a DATA step, two variables (for each by variable)
+      are created: first.byvar and last.byvar 
+      these variables are automatically dropped, so if you want to see them
+        assign them to a new variable*/
+    
+    *basinStart=first.basin;
+    *basinEnd=last.basin;
+
+    if first.basin then SeasonStart=StartDate; /*at the start of each basin 
+                                get the start date for the first storm*/
+    
+    if last.basin then do;/*for the last record in a basin...*/
+      SeasonEnd=EndDate;/*get the ending date...*/
+      SeasonLength=SeasonEnd-SeasonStart;/*calculate the duration...*/
+      *output;/*output the result*/
+    end;
+    *keep basin SeasonStart SeasonEnd SeasonLength;
+    format SeasonStart SeasonEnd mmddyy10.;
+  run;/*variables are reset to missing when new records are read,
+      including the StartDate variable*/
+
+  data SeasonLength;
+    set storm17(drop=location);
+    retain SeasonStart;/*RETAIN tells the data step to not reset this
+                        variable to missing when new records are read*/
+
+    by basin;
+    
+    if first.basin then SeasonStart=StartDate; /*at the start of each basin 
+                                get the start date for the first storm*/
+    
+    if last.basin then do;/*for the last record in a basin...*/
+      SeasonEnd=EndDate;/*get the ending date...*/
+      SeasonLength=SeasonEnd-SeasonStart;/*calculate the duration...*/
+      weeks=intck('week',SeasonStart,SeasonEnd);
+      output;/*output the result*/
+    end;
+    keep basin SeasonStart SeasonEnd SeasonLength weeks;
+    format SeasonStart SeasonEnd mmddyy10.;
+  run;
+
+  /*Suppose we want to make an interval for predicted season start
+  and end in the next year--earliest start is 2 weeks prior to this
+  year's start, latest end is 2 weeks after this year's end*/
+
+  data Projection;
+    set storm17(drop=location);
+    retain SeasonStart;/*RETAIN tells the data step to not reset this
+                        variable to missing when new records are read*/
+
+    by basin;
+    
+    if first.basin then SeasonStart=StartDate; /*at the start of each basin 
+                                get the start date for the first storm*/
+    
+    if last.basin then do;/*for the last record in a basin...*/
+      SeasonEnd=EndDate;/*get the ending date...*/
+      SeasonLength=SeasonEnd-SeasonStart;/*calculate the duration...*/
+      weeks=intck('week',SeasonStart,SeasonEnd);
+      NextStart=intnx('year',SeasonStart,1,'same');
+      NextEnd=intnx('year',SeasonEnd,1,'same');
+      output;/*output the result*/
+    end;
+    keep basin SeasonStart SeasonEnd SeasonLength weeks NextStart NextEnd;
+    format SeasonStart SeasonEnd NextStart NextEnd weekdate.;
   run;
