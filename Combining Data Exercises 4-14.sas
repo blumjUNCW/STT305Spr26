@@ -177,6 +177,64 @@ run;
 proc sgplot data=use;
   hbar control / response=GrRate stat=mean 
                 group=year groupdisplay=cluster;
+  yaxis labelpos=top;
+  xaxis grid;
+  keylegend / position=bottomright location=inside
+              title='';
 run;
 
 /**style this one up, and try the second one...*/
+proc sgpanel data=use;
+  panelby year; /**variables that create panels...*/
+  vbar control / response=GrRate stat=mean 
+                  group=hloffer groupdisplay=cluster;
+run;
+
+/**I need to create a different format for HLOFFER, so
+I need to find out how it's defined...*/
+proc format library=ipeds305 fmtlib;
+    /**FMTLIB is a listing of all format definitions in the 
+      specified library (WORK is default)*/
+run;
+
+proc format library=ipeds305 cntlout=ipedsFormats;
+    /*CNTLOUT= creates a data set of the format 
+    definitions*/
+run;
+
+proc format;
+  value hlSimplify
+  5,6 = "Bachelor's Degree"
+  7,8 = "Master's Degree"
+  9 = 'Doctoral'
+  other = [hloffer.] /*you can use a format definition
+      as a rule for formatting values by putting it in [] */
+  ;
+run;
+
+proc sgpanel data=use;
+  panelby year / novarname; /**variables that create panels...*/
+  vbar control / response=GrRate stat=mean 
+                  group=hloffer groupdisplay=cluster;
+  format hloffer hlSimplify.;
+  colaxis display=(nolabel);
+    /*analogue for xaxis on a panel graph is colaxis*/
+  rowaxis grid gridattrs=(color=gray99);
+run;
+
+proc sgpanel data=use;
+  panelby year hloffer / novarname columns=6; 
+  vbar control / response=GrRate stat=mean;
+  format hloffer hlSimplify.;
+  colaxis display=(nolabel);
+  rowaxis grid gridattrs=(color=gray99);
+run;
+
+
+proc sgpanel data=use;
+  panelby year hloffer / novarname layout=lattice; 
+  vbar control / response=GrRate stat=mean;
+  format hloffer hlSimplify.;
+  colaxis display=(nolabel);
+  rowaxis grid gridattrs=(color=gray99);
+run;
