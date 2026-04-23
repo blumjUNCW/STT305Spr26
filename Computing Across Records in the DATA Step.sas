@@ -42,7 +42,9 @@ data returns;
   by _name_ descending dt;
 
   retain totalRet; /**hold the value when reading the next record*/
-  if first._name_ then totalRet = 1;
+  if first._name_ then totalRet = 1;/*each time we get to a new
+                                    fund, reset my total return -- 1 is 
+                                    my identity value for multiplication*/
 
   TotalRet = TotalRet*(1+return);
     /**try to make an accumulating return value
@@ -51,4 +53,196 @@ data returns;
         and
         retained
         */
+run;/**All that I want is in here, but it's not the right form
+      and it has extra stuff*/
+
+data returns;
+  set forComputing;
+  by _name_ descending dt;
+
+  retain totalRet; 
+  if first._name_ then totalRet = 1;
+
+  TotalRet = TotalRet*(1+return);
+
+  /*When would I create the 3 month return?
+    try not to use any specific dates so this works for an
+      arbitrary ending point*/
+  if _n_ eq 3 then output;
+    /*This would work only for the first fund...I
+        need my own counter that I can reset for each fund*/
+
+run;
+
+data returns;
+  set forComputing;
+  by _name_ descending dt;
+
+  retain totalRet months;/*retain both accumulators...*/ 
+
+  if first._name_ then do;
+    totalRet = 1;
+    months = 0;
+  end;/*...reset both accumulators when starting a new fund*/
+
+  TotalRet = TotalRet*(1+return);
+  months = months+1; /*count how many months have been included..*/
+
+  /*When would I create the 3 month return?
+    try not to use any specific dates so this works for an
+      arbitrary ending point*/
+
+  if months eq 3 then output;
+
+run;
+
+
+data returns;
+  set forComputing;
+  by _name_ descending dt;
+
+  retain totalRet months; 
+  if first._name_ then do;
+    totalRet = 1;
+    months = 0;
+  end;
+
+  TotalRet = TotalRet*(1+return);
+  months = months+1;
+
+  /**Let's clean up what we are outputting... */
+
+  if months eq 3 then do;
+    Ret3Month = TotalRet - 1;
+    output;
+  end;
+
+  keep _name_ Ret3Month;
+  rename _name_ = Fund;
+  format Ret3Month percentn8.3;
+run;
+
+
+
+data returns;
+  set forComputing;
+  by _name_ descending dt;
+
+  retain totalRet months Ret3Month; 
+  if first._name_ then do;
+    totalRet = 1;
+    months = 0;
+  end;
+
+  TotalRet = TotalRet*(1+return);
+  months = months+1;
+
+  /**Add in 6 month return */
+
+  if months eq 3 then do;
+    Ret3Month = TotalRet - 1;
+  end;
+
+  if months eq 6 then do;
+    Ret6Month = TotalRet - 1;
+    *output;
+  end;
+
+  *keep _name_ Ret3Month Ret6Month;
+  rename _name_ = Fund;
+  format Ret3Month Ret6Month percent12.3;
+run;
+
+data returns;
+  set forComputing;
+  by _name_ descending dt;
+
+  retain totalRet months Ret3Month Ret6Month Ret1Year Ret2Year; 
+  if first._name_ then do;
+    totalRet = 1;
+    months = 0;
+  end;
+
+  TotalRet = TotalRet*(1+return);
+  months = months+1;
+
+  /**Add in 6 month return */
+
+  if months eq 3 then Ret3Month = TotalRet - 1;
+  if months eq 6 then Ret6Month = TotalRet - 1;
+  if months eq 12 then Ret1Year = TotalRet - 1;
+  if months eq 24 then Ret2Year = TotalRet - 1;
+  if months eq 36 then do;/*this is the last value computed...*/
+    Ret3Year = TotalRet - 1;
+    output;/*so, it's when I want to output*/
+  end;
+
+  keep _name_ Ret3Month Ret6Month Ret1Year Ret2Year Ret3Year;
+  rename _name_ = Fund;
+  format Ret3Month Ret6Month Ret1Year Ret2Year Ret3Year percent12.3;
+run;
+
+
+data returns;
+  set forComputing;
+  by _name_ descending dt;
+
+  retain totalRet months Ret3Month Ret6Month Ret1Year Ret2Year; 
+  if first._name_ then do;
+    totalRet = 1;
+    months = 0;
+  end;
+
+  TotalRet = TotalRet*(1+return);
+  months = months+1;
+
+
+  if months eq 3 then Ret3Month = TotalRet - 1;
+  if months eq 6 then Ret6Month = TotalRet - 1;
+  if months eq 12 then Ret1Year = TotalRet - 1;
+  if months eq 24 then Ret2Year = TotalRet - 1;
+  if last._name_ then do;
+    /*since I limited to 36 months when I sorted,
+      I can use last. for the fund name to decide
+        the final output time*/
+    Ret3Year = TotalRet - 1;
+    output;
+  end;
+
+  keep _name_ Ret3Month Ret6Month Ret1Year Ret2Year Ret3Year;
+  rename _name_ = Fund;
+  format Ret3Month Ret6Month Ret1Year Ret2Year Ret3Year percent12.3;
+run;
+
+data returns;
+  set forComputing;
+  by _name_ descending dt;
+
+  retain totalRet Ret3Month Ret6Month Ret1Year Ret2Year; 
+  if first._name_ then do;
+    totalRet = 1;
+    months = 0;
+  end;
+
+  TotalRet = TotalRet*(1+return);
+  months+1;
+    /* variable + expression;
+      is called a sum statement
+        computes the sum and stores it back into the variable
+        it's automatically retained
+        automatically set to 0 when _N_ eq 1*/
+
+
+  if months eq 3 then Ret3Month = TotalRet - 1;
+  if months eq 6 then Ret6Month = TotalRet - 1;
+  if months eq 12 then Ret1Year = TotalRet - 1;
+  if months eq 24 then Ret2Year = TotalRet - 1;
+  if last._name_ then do;
+    Ret3Year = TotalRet - 1;
+    output;
+  end;
+
+  keep _name_ Ret3Month Ret6Month Ret1Year Ret2Year Ret3Year;
+  rename _name_ = Fund;
+  format Ret3Month Ret6Month Ret1Year Ret2Year Ret3Year percent12.3;
 run;
